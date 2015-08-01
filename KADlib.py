@@ -15,8 +15,32 @@ from bencode import bencode, bdecode
 from hashlib import sha1
 
 
+class KTable(object):
+	"""docstring for KTable"""
+	def __init__(self):
+		pass
 
-class KClient(object):
+	def resp_ping(self):
+		pass
+
+	def resp_krpc(self, krpc):
+		if 'q' == krpc['y']:
+			if 'ping' == krpc['q']:
+				return self.resp_ping()
+			elif 'find_node' == krpc['q']:
+				pass
+			elif 'get_peers' == krpc['q']:
+				pass
+			elif 'announce_peer' == krpc['q']:
+				pass
+			else:
+				return None
+		else:
+			return None
+
+
+
+class KClient(KTable):
 	"""docstring for KClient"""
 	def __init__(self, nid):
 		self.nid = nid
@@ -34,7 +58,6 @@ class KClient(object):
 
 	def ping(self, address):
 		tid = os.urandom(4)		# token id
-		#print tid.encode('hex')
 		msg = dict(
 			t = tid,
 			y = "q",
@@ -48,7 +71,6 @@ class KClient(object):
 	def find_node(self, address, target=None):
 		target = target if target else self.nid
 		tid = os.urandom(4)		# token id
-		#print tid.encode('hex')
 		msg = dict(
 			t = tid,
 			y = "q",
@@ -62,12 +84,26 @@ class KClient(object):
 	def get_peers(self, address, info_hash=None):
 		info_hash = info_hash if info_hash else self.nid
 		tid = os.urandom(4)		# token id
-		#print tid.encode('hex')
 		msg = dict(
 			t = tid,
 			y = "q",
 			q = "get_peers",
 			a = dict(id = self.nid, info_hash = info_hash)
+		)
+		self.send_krpc(msg, address)
+		return self.recv_krpc()
+
+
+	# implied_port字段0表示和DHT共用一个端口下载种子文件，1表示使用后面的port字段端口下载种子文件。
+	def announce_peer(self, address, info_hash=None, token=None, implied_port=1, port=1234):
+		info_hash = info_hash if info_hash else self.nid
+		token = token.decode('hex')
+		tid = os.urandom(4) 	# token id
+		msg = dict(
+			t = tid,
+			y = "q",
+			q = "announce_peer",
+			a = dict(id = self.nid, implied_port = implied_port, info_hash = info_hash, port = port, token = token)
 		)
 		self.send_krpc(msg, address)
 		return self.recv_krpc()
@@ -93,13 +129,6 @@ class KServer(object):
 		
 
 
-class KTable(object):
-	"""docstring for KTable"""
-	def __init__(self):
-		print 'This is KTable.'
-
-
-
 class KAD(object):
 	"""docstring for KAD"""
 	def __init__(self):
@@ -121,16 +150,25 @@ if '__main__'==__name__:
 	tid = kad.random_id()
 	print 'node id : %s' % nid.encode('hex')
 	print 'Target id : %s' % tid.encode('hex')
-	print '\n\n'
+	print '\n'
 
 	kcli = KClient(nid)
+
+	print 'ping : '
+	print kcli.ping(('127.0.0.1', 6881))
+	print '\n'
+
 	print 'find_node : '
 	print kcli.find_node(('127.0.0.1', 6881), tid)
-	print '\n\n'
+	print '\n'
 
 	print 'get_peers : '
 	print kcli.get_peers(('127.0.0.1', 6881), tid)
-	print '\n\n'
+	print '\n'
+
+	print 'resp_krpc : '
+	print kcli.resp_krpc(tid)
+	print '\n'
 
 	raw_input()
 		
