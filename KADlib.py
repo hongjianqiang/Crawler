@@ -17,21 +17,77 @@ from hashlib import sha1
 
 class KTable(object):
 	"""docstring for KTable"""
-	def __init__(self):
-		pass
+	def __init__(self, node, K):
+		self.node		= node
+		self.K			= K
+		self.buckets	= dict()
+
+		# 初始化，生成空K-bucket桶
+		for i in xrange(0,len(self.node[2])*4):
+			self.buckets[i] = list()
+
+		self.buckets[0].append(self.node)
+
+
+	# 追加nid到K桶
+	def append(self, node):
+		distance = int(self.node[2], 16) ^ int(node[2], 16)
+		num = len(bin(distance)) - 3	# 查找对应的K桶号（范围）
+		
+		flag = 'ignore'
+		if 0 == len(self.buckets[num]):
+			flag = 'insert'
+		if len(self.buckets[num]) < self.K:
+			for index, nodes in self.buckets.items():
+				for n in nodes:
+					# 过滤掉与K-Buckets里 IP 相同的node
+					if n[0] == node[0]:
+						flag = 'ignore'
+						break
+					else:
+						flag = 'insert'
+					# 过滤掉与K-Buckets里 ID 相同的node
+					if n[2] == node[2]:	
+						flag = 'ignore'
+						break
+					else:
+						flag = 'insert'
+
+		if 'insert' == flag:
+			self.buckets[num].append(node)
+
+
+	# 返回与目标node ID或infohash的最近K个node.
+	def find_close_nodes(self, target):
+		distance = int(self.node[2], 16) ^ int(target, 16)
+		num = len(bin(distance)) - 3
+		print "\nbuckets[%d]:" % num,
+		return self.buckets[num]
+
+	def show(self):
+		print self.buckets
 
 	def resp_ping(self):
 		pass
 
+	def resp_find_node(self):
+		pass
+
+	def resp_get_peers(self):
+		pass
+
+	def resp_announce_peer(self):
+		pass
+
 	def resp_krpc(self, krpc):
-		if 'q' == krpc['y']:
-			if 'ping' == krpc['q']:
+		if 'q' in krpc['y'].keys():
+			if 'ping' in krpc['q'].keys():
 				return self.resp_ping()
-			elif 'find_node' == krpc['q']:
+			elif 'find_node' in krpc['q'].keys():
 				pass
-			elif 'get_peers' == krpc['q']:
+			elif 'get_peers' in krpc['q'].keys():
 				pass
-			elif 'announce_peer' == krpc['q']:
+			elif 'announce_peer' in krpc['q'].keys():
 				pass
 			else:
 				return None
@@ -40,12 +96,17 @@ class KTable(object):
 
 
 
-class KClient(KTable):
+class KClient(object):
 	"""docstring for KClient"""
-	def __init__(self, nid):
-		self.nid = nid
-		self.ufd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	def __init__(self, nid, ktable):
+		self.nid 		= nid
+		self.ktable 	= ktable
+		self.ufd 		= socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self.ufd.settimeout(5)
+
+		for i in xrange(0,1000):
+			random_id = os.urandom(20).encode('hex')
+			self.ktable.append(('127.0.0.%d' % i, 6881, random_id))
 	
 
 	def close(self):
@@ -124,34 +185,47 @@ class KClient(KTable):
 
 class KServer(object):
 	"""docstring for KServer"""
-	def __init__(self):
-		print 'This is KServer.'
+	def __init__(self, nid, ktable):
+		self.nid 		= nid
+		self.ktable 	= ktable
 		
 
 
 class KAD(object):
 	"""docstring for KAD"""
-	def __init__(self):
-		pass
+	def __init__(self, nid, port):
+		self.K 		= 8
+		self.nid  	= nid
+		self.port 	= port
+		self.ktable = KTable(('127.0.0.1',self.port,self.nid), self.K)
+		self.kclient= KClient(self.nid, self.ktable)
+		self.kserver= KServer(self.nid, self.ktable)
 
-	def random_id(self):
-		hash = sha1()
-		hash.update(os.urandom(20))
-		return hash.digest()
+	def show_buckets(self):
+		self.ktable.show()
 
 	def serve_forever(self):
 		pass
 		
 
 
-if '__main__'==__name__:
-	kad = KAD()
-	nid = kad.random_id()
-	tid = kad.random_id()
-	print 'node id : %s' % nid.encode('hex')
-	print 'Target id : %s' % tid.encode('hex')
-	print '\n'
+def random_id():
+	hash = sha1()
+	hash.update(os.urandom(20))
+	return hash.digest()
 
+
+if '__main__'==__name__:
+	nid = random_id().encode('hex')
+	tid = random_id().encode('hex')
+	print 'node id : %s' % nid
+	print 'Target id : %s' % tid
+	print ''
+
+	kad = KAD(nid, 6881)
+	#kad.show_buckets()
+
+	'''
 	kcli = KClient(nid)
 
 	print 'ping : '
@@ -169,6 +243,7 @@ if '__main__'==__name__:
 	print 'resp_krpc : '
 	print kcli.resp_krpc(tid)
 	print '\n'
+	'''
 
 	raw_input()
 		
